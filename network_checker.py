@@ -1,52 +1,71 @@
+# === Neo's Network Checker v3 - IT Support Edition ===
 import socket
 import ipaddress
+import os
 
-def is_valid_ip(ip_str):
-    # Track 1 fix 1 & 2: strip /24 and len check (like your login-system.py fix)
-    clean_ip = ip_str.split('/')[0]
-    parts = clean_ip.split('.')
-    if len(parts) != 4:
-        return False, f"Invalid: len={len(parts)}, needs 4"
+def check_network(target):
+    # FIX: Remove > and spaces if you copy-paste with >
+    target = target.strip().lstrip('> ').strip()
+    target = target.replace('>', '').strip()
+    # Remove /24 or any CIDR if user pastes it
+    clean_target = target.split('/')[0]
+    
+    print(f"\n--- Checking: {target} (clean: {clean_target}) ---")
+    
+    # 1. Check if valid IPv4
     try:
-        ip = ipaddress.ip_address(clean_ip)
-        return True, f"{ip} is valid IPv{ip.version}"
-    except ValueError:
-        return False, f"{clean_ip} is invalid"
+        ipaddress.IPv4Address(clean_target)
+        print(f"{clean_target} is valid IPv4")
+        ip_to_test = clean_target
+        is_ip = True
+    except:
+        # It's a domain name like google.com
+        print(f"{clean_target} is a domain name")
+        try:
+            ip_to_test = socket.gethostbyname(clean_target)
+            print(f"DNS: {clean_target} -> {ip_to_test}")
+            is_ip = False
+        except Exception as e:
+            print(f"{clean_target} DNS failed - {e}")
+            return
 
-def check_host(ip, port=53, timeout=3):
-    # Track 1 fix 3: DNS with gethostbyname + try/except
-    try:
-        resolved = socket.gethostbyname(ip)
-        print(f"DNS: {ip} -> {resolved}")
-    except socket.gaierror as e:
-        print(f"❌ DNS fail for {ip}: {e}")
-        return
-
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        result = sock.connect_ex((ip, port))
-        sock.close()
-        if result == 0:
-            print(f"✅ {ip}:{port} reachable - Network OK!")
-        else:
-            print(f"⚠️ {ip}:{port} not reachable - check internet/firewall")
-    except Exception as e:
-        print(f"Error: {e}")
-
-# --- Tests ---
-print("=== Neo's Network Checker v2 ===")
-tests = ["8.8.8.8", "192.168.1.10", "192.168.0.1/24", "999.999.999.999", "google.com"]
-
-for t in tests:
-    if "." in t and t[0].isdigit():
-        valid, msg = is_valid_ip(t)
-        print(f"{msg}")
-        if valid:
-            check_host(t.split('/')[0])
+    # 2. Smart port logic - THIS FIXES YOUR BUG
+    if ip_to_test in ["8.8.8.8", "1.1.1.1", "8.8.4.4"]:
+        port = 53  # Real DNS servers
+        port_name = "DNS (53)"
+    elif is_ip and ip_to_test.startswith("192.168."):
+        port = 80  # Routers/printers usually have web page on 80
+        port_name = "HTTP (80) - router/printer check"
     else:
-        print(f"\nTesting domain: {t}")
-        check_host(t)
-    print("-")
+        port = 443 # Websites and everything else
+        port_name = "HTTPS (443)"
+
+    # 3. Test connectivity
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        s.connect((ip_to_test, port))
+        s.close()
+        print(f"✅ {ip_to_test}:{port} {port_name} reachable - Network OK!")
+    except:
+        print(f"⚠️  {ip_to_test}:{port} {port_name} not reachable")
+        if port == 53:
+            print("   Tip: Only DNS servers like 8.8.8.8 listen on 53")
+        elif ip_to_test.startswith("192.168."):
+            print("   Tip: Not on same WiFi as that 192.168.x.x device? Normal on mobile data")
+
+# --- MAIN with input() ---
+print("=== Neo's Network Checker v3 ===")
+print("Type IP, domain, or with /24 (e.g., 8.8.8.8, google.com, 192.168.1.1/24)")
+print("Type 'exit' to quit\n")
+
+while True:
+    user_input = input("Enter IP/domain > ")
+    if user_input.lower() in ["exit", "quit", "q"]:
+        break
+    check_network(user_input)
 
 print("\nDone - This is what IT Support does daily! - Neo Rampai")
+
+
+

@@ -1,0 +1,72 @@
+# === Neo's Network Checker v3 - IT Support Edition ===
+import socket
+import ipaddress
+import os
+
+def check_network(target):
+    target = target.strip()
+    if not target:
+        print("Empty input - skipping")
+        return
+
+    # Remove /24 or any CIDR if user pastes it
+    clean_target = target.split('/')[0]
+    
+    print(f"\n--- Checking: {target} (clean: {clean_target}) ---")
+    
+    # 1. Check if valid IPv4
+    try:
+        ipaddress.IPv4Address(clean_target)
+        print(f"{clean_target} is valid IPv4")
+        ip_to_test = clean_target
+        is_ip = True
+    except:
+        # It's a domain name like google.com
+        print(f"{clean_target} is a domain name")
+        try:
+            ip_to_test = socket.gethostbyname(clean_target)
+            print(f"DNS: {clean_target} -> {ip_to_test}")
+            is_ip = False
+        except Exception as e:
+            print(f"{clean_target} DNS failed - {e}")
+            return
+
+    # 2. Smart port logic - THIS FIXES YOUR BUG
+    if ip_to_test in ["8.8.8.8", "1.1.1.1", "8.8.4.4"]:
+        port = 53  # Real DNS servers
+        port_name = "DNS (53)"
+    elif is_ip and ip_to_test.startswith("192.168."):
+        port = 80  # Routers/printers usually have web page on 80
+        port_name = "HTTP (80) - router/printer check"
+    else:
+        port = 443 # Websites and everything else
+        port_name = "HTTPS (443)"
+
+    # 3. Test connectivity
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        s.connect((ip_to_test, port))
+        s.close()
+        print(f"✅ {ip_to_test}:{port} {port_name} reachable - Network OK!")
+    except:
+        print(f"⚠️  {ip_to_test}:{port} {port_name} not reachable")
+        if port == 53:
+            print("   Tip: Only DNS servers like 8.8.8.8 listen on 53")
+        elif ip_to_test.startswith("192.168."):
+            print("   Tip: Not on same WiFi as that 192.168.x.x device? Normal on mobile data")
+
+# --- MAIN with input() ---
+print("=== Neo's Network Checker v3 ===")
+print("Type IP, domain, or with /24 (e.g., 8.8.8.8, google.com, 192.168.1.1/24)")
+print("Type 'exit' to quit\n")
+
+while True:
+    user_input = input("Enter IP/domain > ")
+    if user_input.lower() in ["exit", "quit", "q"]:
+        break
+    check_network(user_input)
+
+print("\nDone - This is what IT Support does daily! - Neo Rampai")
+
+
